@@ -14,24 +14,24 @@ class RecordingImporter
     recording = nil
 
     Dir.mktmpdir(Rails.configuration.x.recording_work_dir) do |tmpdir|
-      FileUtils.cd(tmpdir) do
-        system('tar', '--verbose', '--extract', '--file', filename) \
-          || raise(RecordingImporterError, "Failed to extract tar file: #{filename}")
+     # FileUtils.cd(tmpdir) do
+       #system('tar', '--verbose', '--extract', '--file', filename) \
+       #  || raise(RecordingImporterError, "Failed to extract tar file: #{filename}")
 
-        Dir.glob('*/*/metadata.xml').each do |metadata_xml|
-          logger.info("Found metadata file: #{metadata_xml}")
-          metadata = IO.read(metadata_xml)
-          recording, playback_format = Recording.create_from_metadata_xml(metadata, published: false)
+       # Dir.glob('*/*/metadata.xml').each do |metadata_xml|
+          logger.info("Found metadata file: #{filename}")
+          metadata = IO.read(filename)
+          recording, playback_format = Recording.create_from_metadata_xml(metadata, published: true)
 
-          publish_format_dir = "#{Rails.configuration.x.recording_publish_dir}/#{playback_format.format}"
-          FileUtils.mkdir_p(publish_format_dir)
-          FileUtils.mv("#{playback_format.format}/#{recording.record_id}", publish_format_dir, force: true)
-        end
+        #  publish_format_dir = "#{Rails.configuration.x.recording_publish_dir}/#{playback_format.format}"
+        #  FileUtils.mkdir_p(publish_format_dir)
+        #  FileUtils.mv("#{playback_format.format}/#{recording.record_id}", publish_format_dir, force: true)
+       # end
 
         recording.update!(published: true)
-      end
+     # end
     end
 
-    FileUtils.rm(filename)
+  #  FileUtils.rm(filename)
   end
 end

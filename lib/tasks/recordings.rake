@@ -19,10 +19,10 @@ namespace :recordings do
         Rails.logger.warn(e.full_message(highlight: false, order: :top))
       end
     end
-    listener.only(/\.tar$/)
+    listener.only(/metadata\.xml$/)
 
     Rails.logger.debug('Checking for existing files…')
-    Dir.glob("#{dir}/*.tar").each do |file|
+    Dir.glob("#{dir}/**/metadata.xml").each do |file|
       RecordingImporter.import(file)
     rescue StandardError => e
       Rails.logger.error("Failed to import recording: #{e}")

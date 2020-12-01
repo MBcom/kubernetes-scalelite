@@ -32,7 +32,7 @@ namespace :poll do
     Server.all.each do |server|
       Rails.logger.debug("Polling Server id=#{server.id}")
       resp = get_post_req(encode_bbb_uri('getMeetings', server.url, server.secret))
-      meetings = resp.xpath('/response/meetings/meeting')
+      meetings = resp.xpath('/response/meetings/meeting/attendees/attendee')
 
       # Reset unhealthy counter so that only consecutive unhealthy calls are counted
       server.reset_unhealthy_counter

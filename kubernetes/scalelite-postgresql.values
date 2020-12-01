@@ -1,0 +1,4 @@
+postgresqlPassword: POSTGRES-PASSWORD
+postgresqlDatabase: scalelite
+postgresqlUsername: postgres
+

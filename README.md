@@ -1,4 +1,15 @@
-# Scalelite
+# Scalelite for Kubernetes Deployment
+
+This version of scalelite is designed to run in high available kubernetes clusters. 
+Currently we have the same features as upstream version v1.0.8.
+
+## Extra features
+* you need just to mount the same NFS share to `/var/bigluebutton/published` and `/var/bigbluebutton/playback` on each of your BBB Servers
+* no need to additional post publish jobs
+* in combination with https://github.com/MBcom/enforce-authentication-greenlight your recordings are protected by Greenlight (LDAP) authentication
+* we use the current number of conference participants for calculating server load, instead of the number of running conferences so we are able to balance the load a little bit more granular
+   
+
 
 [BigBlueButton](https://docs.bigbluebutton.org/) is an open source web conferencing system for online learning.
 
@@ -16,19 +27,6 @@ To load balance the pool, Scalelite periodically polls each BigBlueButton to che
 
 Many BigBlueButton servers will create many recordings.  Scalelite can serve a large set of recordings by consolidating them together, indexing them in a database, and, when receiving an incoming [getRecordings](https://docs.bigbluebutton.org/dev/api.html#getrecordings), use the database index to return quickly the list of available recordings.
 
-## Before you begin
-
-The Scalelite installation process requires advanced technical knowledge.  You should, at a minimum, be very familar with
-  
-   * Setup and administration of a BigBlueButton server
-   * Setup and administration of a Linux server and using common tools, such as `systemd`, to manage processes on the server
-   * How the [BigBlueButton API](http://docs.bigbluebutton.org/dev/api.html) works with a front-end
-   * How [docker](https://www.docker.com/) containers work 
-   * How UDP and TCP/IP work together
-   * How to administrate a Linux Firewall
-   * How to setup a TURN server
-   
-If you are a beginner, you will have a difficult time getting any part of this deployment correct.  If you require help, see [Getting Help](#getting-help)
 
 ## Architecture of Scalelite
 
@@ -39,10 +37,11 @@ There are several components required to get Scalelite up and running:
 3. NFS Shared Volume
 4. PostgreSQL Database
 5. Redis Cache 
+6. NGINX servers for provoding the recordings to users
 
 An example Scalelite deployment will look like this:
 
-![](images/scalelite.png)
+![](images/scalelite.svg)
 
 ### Minimum Server Requirements
 
@@ -70,63 +69,85 @@ To help users who are behind restrictive firewalls to send/receive media (audio,
 
 Again, [bbb-install.sh](https://github.com/bigbluebutton/bbb-install#install-a-turn-server) can automate this process for you.
 
+### Setup kubernetes Namespace
+If you have not already created a namespace or do not want to use the same as for your Greenlight Kubernetes deployment - it is time to create it now.
+```bash
+kubectl create namespace <your scalelite namespace>
+```
+  
+Now run the following:
+```bash
+sed -i 's/scalelite-ns/<your scalelite namespace>/g' ./kubernetes/*.yaml
+```
+
 ### Setup a shared volume for recordings
 
-See [Setting up a shared volume for recordings](sharedvolume-README.md)
+Mount a the same shared folder to all BBB servers on `/var/bigluebutton/published` and `/var/bigbluebutton/playback`.
+Make sure you copy existing data first to the NFS share before you over mount it.
+  
+Create now persistent volume in your kubernetes server:
+```bash
+sed -i 's/NAS-IP/<your NAS IP or DNS Name>/g' ./kubernetes/bbb-nas.yaml
+sed -i 's/NFS-SHARE-PATH/<your NFS share path>/g' ./kubernetes/bbb-nas.yaml
+kubectl apply -f ./kubernetes/bbb-nas.yaml
+```
 
 ### Setup up a PostgreSQL Database
+To create a PostgreSQL Database run the following. Make sure you have helm installed first.
 
-Setting up a PostgreSQL Database depends heavily on the infrastructure you use to setup Scalelite. We recommend you refer to your infrastructure provider's documentation.
-
-Ensure the `DATABASE_URL` that you set in `/etc/default/scalelite` (in the [next step](docker-README.md#common-configuration-for-docker-host-system)) matches the connection url of your PostgreSQL Database. 
-
-For more configuration options, see [configuration](#Configuration).
+```bash
+# if you have not done before
+# helm repo add bitnami https://charts.bitnami.com/bitnami
+sed -i 's/POSTGRES-PASSWORD/<super secure postgres password>/g' ./kubernetes/scalelite-postgresql.values
+helm install -n <your scalelite namespace> scalite-postgres -f ./kubernetes/scalelite-postgresql.values bitnami/postgresql
+```
 
 ### Setup a Redis Cache
 
-Setting up a Redis Cache depends heavily on the infrastructure you use to setup Scalelite. We recommend you refer to your infrastructure provider's documentation.
+To create the Redis Cache run the following.
 
-Ensure the `REDIS_URL` that you set in `/etc/default/scalelite` (in the [next step](docker-README.md#common-configuration-for-docker-host-system)) matches the connection url of your Redis Cache. 
+```bash
+sed -i 's/REDIS-PASSWORD/<super secure redis password>/g' ./kubernetes/scalite-redis.values
+helm install -n <your scalelite namespace> scalelite-redis -f ./kubernetes/scalite-redis.values bitnami/redis
+```
 
-For more configuration options, see [configuration](#Configuration).
 
 ### Deploying Scalelite Docker Containers
 
-See [Deploying Scalelite Docker Containers](docker-README.md)
+To deploy the Scalelite containers run the following:
+
+```bash
+sed -i 's/SECRET-KEY/<super secret key>/g ./kubernetes/*.yaml
+sed -i 's/LOADBALANCER-SECRET/<the scaelite API key>/g ./kubernetes/*.yaml
+sed -i 's/REDIS-PASSWORD/<super secure redis password>/g ./kubernetes/*.yaml
+sed -i 's/POSTGRES-PASSWORD/<super secure postgres password>/g ./kubernetes/*.yaml
+sed -i 's/conf.example.com/<your desired URL - maybe your Greenlight URL>/g ./kubernetes/*.yaml
+
+kubectl apply -f ./kubernetes/ingress-video.yaml
+kubectl apply -f ./kubernetes/nginx-videos-pdb.yaml
+kubectl apply -f ./kubernetes/nginx-videos.yaml
+kubectl apply -f ./kubernetes/scalelite-pdb.yaml
+kubectl apply -f ./kubernetes/scalelite-service.yaml
+kubectl apply -f ./kubernetes/scalelite.yaml
+```
 
 ### Configure your Front-End to use Scalelite
 
 To switch your Front-End application to use Scalelite instead of a single BigBlueButton server, there are 2 changes that need to be made
 
-- `BigBlueButton server url` should be set to the url of your Scalelite deployment `http(s)://<scalelite-hostname>/bigbluebutton/`
-- `BigBlueButton shared secret` should be set to the `LOADBALANCER_SECRET` value that you set in `/etc/default/scalelite`
+- `BigBlueButton server url` should be set to the url of your Scalelite deployment `http(s)://<your desired URL - maybe your Greenlight URL>/bigbluebutton/`
+- `BigBlueButton shared secret` should be set to the `<the scaelite API key>` value 
 
 ## Configuration
 
-### Environment Variables
-
-#### Required
-
-* `URL_HOST`: The hostname that the application API endpoint is accessible from. Used to protect against DNS rebinding attacks. Should be left blank if deploying Scalelite behind a Network Loadbalancer.
-* `SECRET_KEY_BASE`: A secret used internally by Rails. Should be unique per deployment. Generate with `bundle exec rake secret` or `openssl rand -hex 64`.
-* `LOADBALANCER_SECRET`: The shared secret that applications will use when calling BigBlueButton APIs on the load balancer. Generate with `openssl rand -hex 32`
-* `DATABASE_URL`: URL for connecting to the PostgreSQL database, see the [Rails documentation](https://guides.rubyonrails.org/configuring.html#configuring-a-database). The URL should be in the form of `postgresql://username:password@connection_url`. Note that instead of using this environment variable, you can configure the database server in `config/database.yml`.
-* `REDIS_URL`: URL for connecting to the Redis server, see the [Redis gem documentation](https://rubydoc.info/github/redis/redis-rb/master/Redis#initialize-instance_method). The URL should be in the form of `redis://username:password@connection_url`. Note that instead of using this environment variable, you can configure the redis server in `config/redis_store.yml` (see below). 
-
 #### Docker-Specific
 
-These variables are used by the service startup scripts in the Docker images, but are not used if you are deploying the application in a different way.
 
-* `NGINX_SSL`: Set this variable to "true" to enable the "nginx" image to listen on SSL. If you enable this, then you must bind mount the files `/etc/nginx/ssl/live/$URL_HOST/fullchain.pem` and `/etc/nginx/ssl/live/$URL_HOST/privkey.pem` (containing the certificate plus intermediates and the private key respectively) into the Docker image. Alternately, you can mount the entire `/etc/letsencrypt` directory from certbot to `/etc/nginx/ssl` instead.
-* `BEHIND_PROXY`: Set to true if scalelite is behind a proxy or load balancer.
 * `POLL_INTERVAL`: Used by the "poller" image to set the interval at which BigBlueButton servers are polled, in seconds. Defaults to 60.
-* `RECORDING_IMPORT_POLL`: Whether or not to poll the recording spool directory for new recordings. Defaults to "true". If the recording poll directory is on a local filesystem where inotify works, you can set this to "false" to reduce CPU overhead.
 * `RECORDING_IMPORT_POLL_INTERVAL`: How often to check the recording spool directory for new recordings, in seconds (when running in poll mode). Defaults to 60.
 
 #### Optional
 
-* `PORT`: Set the TCP port number to listen on. Defaults to 3000.
-* `BIND`: Instead of setting a port, you can set a URL to bind to. This allows using a Unix socket. See [The Puma documentation](https://puma.io/puma/Puma/DSL.html#bind-instance_method) for details.
 * `INTERVAL`: Adjust the polling interval (in seconds) for updating server statistics and meeting status. Defaults to 60. Only used by the "poll" task.
 * `WEB_CONCURRENCY`: The number of processes for the puma web server to fork. A reasonable value is 2 per CPU thread or 1 per 256MB ram, whichever is lower.
 * `RAILS_MAX_THREADS`: The number of threads to run in the Rails process. The number of Redis connections in the pool defaults to match this value. The default is 5, a reasonable value for production.
@@ -142,28 +163,9 @@ These variables are used by the service startup scripts in the Docker images, bu
 * `SERVER_HEALTHY_THRESHOLD`: The number of times an offline server needs to responds successfully for it to be considered online. Defaults to **1**. If you increase this number, you should decrease `POLL_INTERVAL`
 * `SERVER_UNHEALTHY_THRESHOLD`: The number of times an online server needs to responds unsuccessfully for it to be considered offline. Defaults to **2**. If you increase this number, you should decrease `POLL_INTERVAL`
 
-### Redis Connection (`config/redis_store.yml`)
-
-For a deployment using docker, you should configure the Redis Connection using the `REDIS_URL` environment variable instead, see above.
-
-The `config/redis_store.yml` allows specifying per-environment configuration for the Redis server.
-The file is similar in structure to the `config/database.yml` file used by ActiveRecord.
-By default, a minimal configuration is shipped which will connect to a Redis server on localhost in development, and use "fakeredis" (an in-memory Redis emulator) to run tests without requiring a Redis server.
-The default production configuration allows specifying the Redis server connection to use via an environment variable, see below.
-You may use this configuration file to set any of the options listed in the [Redis initializer](https://rubydoc.info/github/redis/redis-rb/master/Redis#initialize-instance_method).
-Additionally, these options can be set:
-
-* `pool`: The number of connections in the pool (should match number of threads). Defaults to `RAILS_MAX_THREADS` environment variable, otherwise 5.
-* `pool_timeout`: Amount of time (seconds) to wait if all connections in the pool are in use. Defaults to 5.
-* `namespace`: An optional prefix to apply to all keys stored in Redis.
-
 ## Upgrading
 
-Upgrading Scalelite to the latest version can be done using one command: 
-
-`systemctl restart scalelite.target`
-
-To confirm that you have the latest version, enter `http(s)://<scalelite-hostname>/bigbluebutton/api` in your browser and confirm that the value inside the `<build><\build>` tag is equal to the new version.
+To upgrade you must edit the used Docker images in `./kubernetes/scalelite.yaml` and apply the file with kubectl again after that.
 
 ## Administration
 
@@ -176,7 +178,6 @@ Scalelite comes with a set of commands to
 
 Server management is provided using rake tasks which update server information in Redis.
 
-In a Docker deployment, these should be run from in the Docker container. You can enter the Docker container using a command like `docker exec -it scalelite-api /bin/sh`
 
 ### Show configured server details
 
@@ -297,3 +298,6 @@ This will print a table displaying a list of all servers and some basic statisti
 ## Getting Help
 
 For commercial help with setup and deployment of Scalelite, contact us at [Blindside Networks](https://blindsidenetworks.com/scaling-bigbluebutton/).
+
+# Contributions
+Contributions are welcome to that project.

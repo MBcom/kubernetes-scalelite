@@ -1,0 +1,10 @@
+apiVersion: policy/v1beta1
+kind: PodDisruptionBudget
+metadata:
+  name: scalelite-pdb
+  namespace: scalelite-ns
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      group: scalelite

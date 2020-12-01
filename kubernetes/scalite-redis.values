@@ -1,0 +1,2 @@
+password: REDIS-PASSWORD
+cluster.enabled: false

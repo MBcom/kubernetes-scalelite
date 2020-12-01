@@ -1,0 +1,35 @@
+kind: Ingress
+apiVersion: extensions/v1beta1
+metadata:
+  name: ingress-video
+  namespace: scalelite-ns
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    nginx.ingress.kubernetes.io/auth-signin: >-
+      https://conf.example.com
+    nginx.ingress.kubernetes.io/auth-url: https://conf.example.com/is_looged_in
+    nginx.ingress.kubernetes.io/proxy-read-timeout: '300'
+spec:
+  tls:
+    - hosts:
+        - conf.example.com
+      secretName: conf-cert
+  rules:
+    - host: conf.example.com
+      http:
+        paths:
+          - path: /presentation
+            pathType: ImplementationSpecific
+            backend:
+              serviceName: nginx-videos
+              servicePort: 80 
+          - path: /playback
+            pathType: ImplementationSpecific
+            backend:
+              serviceName: nginx-videos
+              servicePort: 80 
+          - path: /download
+            pathType: ImplementationSpecific
+            backend:
+              serviceName: nginx-videos
+              servicePort: 80 

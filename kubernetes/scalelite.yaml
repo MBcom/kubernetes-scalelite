@@ -1,0 +1,144 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: scalelite
+  namespace: scalelite-ns
+  labels:
+    app: scalelite
+    group: scalelite
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: scalelite
+  template:
+    metadata:
+      labels:
+        app: scalelite
+        group: scalelite
+    spec:
+      imagePullSecrets:
+      - name: kube-scalelite-pull
+      volumes:
+      - name: bbb-nas
+        persistentVolumeClaim:
+           claimName: bbb-nas-claim
+      containers:
+      - name: scalelite
+        #image: blindsidenetwks/scalelite:v1.0.7-api
+        image: mbcom/scalelite/api:v1.0.8
+        ports:
+        - containerPort: 80
+        resources:
+            requests:
+              cpu: '2'
+              memory: 1Gi
+        env:
+        - name: URL_HOST
+          value: "conf.example.com"
+        - name: SECRET_KEY_BASE
+          value: 'SECRET-KEY'
+        - name: LOADBALANCER_SECRET
+          value: 'LOADBALANCER-SECRET'
+        - name: DATABASE_URL
+          value: 'postgresql://postgres:POSTGRES-PASSWORD@scalite-postgres-postgresql/scalelite'
+        - name: REDIS_URL
+          value: 'redis://:REDIS-PASSWORD@scalelite-redis-master:6379'
+        volumeMounts:
+        - name: bbb-nas
+          mountPath: /var/bigbluebutton/
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: scalelite-poller
+  namespace: scalelite-ns
+  labels:
+    app: scalelite-poller
+    group: scalelite
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: scalelite-poller
+  template:
+    metadata:
+      labels:
+        app: scalelite-poller
+        group: scalelite
+    spec:
+      imagePullSecrets:
+      - name: kube-scalelite-pull
+      containers:
+      - name: scalelite-poller
+#       image: blindsidenetwks/scalelite:v1.0.7-poller
+        image: mbcom/scalelite/poller:v1.0.8
+        ports:
+        - containerPort: 80
+        resources:
+            requests:
+              cpu: '2'
+              memory: 1Gi
+        env:
+        - name: URL_HOST
+          value: "conf.example.com"
+        - name: SECRET_KEY_BASE
+          value: 'SECRET-KEY'
+        - name: LOADBALANCER_SECRET
+          value: 'LOADBALANCER-SECRET'
+        - name: DATABASE_URL
+          value: 'postgresql://postgres:POSTGRES-PASSWORD@scalite-postgres-postgresql/scalelite'
+        - name: REDIS_URL
+          value: 'redis://:REDIS-PASSWORD@scalelite-redis-master:6379'
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: scalelite-recording-importer
+  namespace: scalelite-ns
+  labels:
+    app: scalelite-recording-importer
+    group: scalelite
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: scalelite-recording-importer
+  template:
+    metadata:
+      labels:
+        app: scalelite-recording-importer
+        group: scalelite
+    spec:
+      volumes:
+      - name: bbb-nas
+        persistentVolumeClaim:
+           claimName: bbb-nas-claim
+      imagePullSecrets:
+      - name: kube-scalelite-pull
+      containers:
+      - name: scalelite-recording-importer
+        image:  mbcom/scalelite/recording-importer:v1.0.8
+        ports:
+        - containerPort: 80
+        resources:
+            requests:
+              cpu: '2'
+              memory: 1Gi
+        env:
+        - name: URL_HOST
+          value: "conf.example.com"
+        - name: SECRET_KEY_BASE
+          value: 'SECRET-KEY'
+        - name: LOADBALANCER_SECRET
+          value: 'LOADBALANCER-SECRET'
+        - name: DATABASE_URL
+          value: 'postgresql://postgres:POSTGRES-PASSWORD@scalite-postgres-postgresql/scalelite'
+        - name: REDIS_URL
+          value: 'redis://:REDIS-PASSWORD@scalelite-redis-master:6379'
+        volumeMounts:
+        - name: bbb-nas
+          mountPath: /var/bigbluebutton/spool/
+          subPath: published
+          readOnly: true
+
