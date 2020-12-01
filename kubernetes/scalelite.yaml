@@ -26,7 +26,7 @@ spec:
       containers:
       - name: scalelite
         #image: blindsidenetwks/scalelite:v1.0.7-api
-        image: mbcom/scalelite/api:v1.0.8
+        image: mbcom/kubernetes-scalelite:v1.0.8-api
         ports:
         - containerPort: 80
         resources:
@@ -72,7 +72,7 @@ spec:
       containers:
       - name: scalelite-poller
 #       image: blindsidenetwks/scalelite:v1.0.7-poller
-        image: mbcom/scalelite/poller:v1.0.8
+        image: mbcom/kubernetes-scalelite:v1.0.8-poller
         ports:
         - containerPort: 80
         resources:
@@ -118,7 +118,7 @@ spec:
       - name: kube-scalelite-pull
       containers:
       - name: scalelite-recording-importer
-        image:  mbcom/scalelite/recording-importer:v1.0.8
+        image:  mbcom/kubernetes-scalelite:v1.0.8-recording-importer
         ports:
         - containerPort: 80
         resources:
