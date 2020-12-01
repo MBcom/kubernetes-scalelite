@@ -83,7 +83,7 @@ class Recording < ApplicationRecord
 
     if Recording.exists?(record_id: recording_params[:record_id])
       recording2 = Recording.find_or_initialize_by(record_id: recording_params[:record_id])
-      playback_format2 = recording.playback_formats.find_or_initialize_by(format: playback_format_params[:format])
+      playback_format2 = recording2.playback_formats.find_or_initialize_by(format: playback_format_params[:format])
       return [recording2, playback_format2]
     end
 
