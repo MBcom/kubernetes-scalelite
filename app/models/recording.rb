@@ -26,10 +26,10 @@ class Recording < ApplicationRecord
     # Recording
     recording_params = {}
     recording_xml = metadata_xml.at_xpath('recording')
-    meta_xml = recording_xml.at_xpath('meta')
-    recording_params[:record_id] = recording_xml.at_xpath('id')&.text
-    recording_params[:meeting_id] = meta_xml.at_xpath('meetingId')&.text
-    recording_params[:name] = meta_xml.at_xpath('meetingName')&.text
+    meeting_xml = recording_xml.at_xpath('meeting')
+    recording_params[:record_id] = meeting_xml['id']
+    recording_params[:meeting_id] = meeting_xml['externalId']
+    recording_params[:name] = meeting_xml['name']
     published = recording_xml.at_xpath('published')&.text
     recording_params[:published] = (published == 'true') if published.present?
     participants = recording_xml.at_xpath('participants')&.text
@@ -79,6 +79,12 @@ class Recording < ApplicationRecord
           sequence: i,
         }
       end
+    end
+
+    if Recording.exists?(record_id: recording_params[:record_id])
+      recording2 = Recording.find_or_initialize_by(record_id: recording_params[:record_id])
+      playback_format2 = recording.playback_formats.find_or_initialize_by(format: playback_format_params[:format])
+      return [recording2, playback_format2]
     end
 
     begin
